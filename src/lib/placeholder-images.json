@@ -1,3 +1,46 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "hero-main",
+      "description": "A modern living room scene with stylish furniture.",
+      "imageUrl": "https://images.unsplash.com/photo-1697220214538-ac047a3eca6e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bW9kZXJuJTIwbGl2aW5nfGVufDB8fHx8MTc2NDEzNzgxOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "modern living"
+    },
+    {
+      "id": "product-1",
+      "description": "A stylish and modern chair with a minimalist design.",
+      "imageUrl": "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBjaGFpcnxlbnwwfHx8fDE3NjQwNzg1MzF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "modern chair"
+    },
+    {
+      "id": "product-2",
+      "description": "A sleek, professional laptop for all your work and play needs.",
+      "imageUrl": "https://images.unsplash.com/photo-1758979919845-9d688cceb7da?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxzbGVlayUyMGxhcHRvcHxlbnwwfHx8fDE3NjQwNjQ1NzF8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "sleek laptop"
+    },
+    {
+      "id": "product-3",
+      "description": "A set of high-quality ceramic coffee mugs.",
+      "imageUrl": "https://images.unsplash.com/photo-1711625826514-ccde209a86fc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxjZXJhbWljJTIwbXVnc3xlbnwwfHx8fDE3NjQwOTgzNjB8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "ceramic mugs"
+    },
+    {
+      "id": "product-4",
+      "description": "A comfortable and durable backpack for daily use or travel.",
+      "imageUrl": "https://images.unsplash.com/photo-1673505705697-763b670e9afd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8ZHVyYWJsZSUyMGJhY2twYWNrfGVufDB8fHx8MTc2NDEzNzgxOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "durable backpack"
+    },
+    {
+      "id": "product-5",
+      "description": "A smart watch with a vibrant display and long battery life.",
+      "imageUrl": "https://images.unsplash.com/photo-1546868871-7041f2a55e12?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxzbWFydCUyMHdhdGNofGVufDB8fHx8MTc2NDEyODY0Mnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "smart watch"
+    },
+    {
+      "id": "product-6",
+      "description": "Wireless over-ear headphones with noise-cancellation.",
+      "imageUrl": "https://images.unsplash.com/photo-1612858249937-1cc0852093dd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHx3aXJlbGVzcyUyMGhlYWRwaG9uZXN8ZW58MHx8fHwxNzY0MTIzNjQ0fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "wireless headphones"
+    }
+  ]
 }
