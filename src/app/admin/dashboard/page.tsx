@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { DollarSign, Package, Users, CreditCard } from 'lucide-react';
+import { orders } from '@/lib/data';
 
 const initialSalesData = [
   { name: 'Jan', total: 0 }, { name: 'Feb', total: 0 },
@@ -15,6 +16,7 @@ const initialSalesData = [
 
 export default function AdminDashboardPage() {
     const [salesData, setSalesData] = useState(initialSalesData);
+    const totalOrders = orders.length;
 
     useEffect(() => {
         const generatedData = initialSalesData.map(item => ({
@@ -44,8 +46,8 @@ export default function AdminDashboardPage() {
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">+2350</div>
-                        <p className="text-xs text-muted-foreground">+180.1% from last month</p>
+                        <div className="text-2xl font-bold">+{totalOrders}</div>
+                        <p className="text-xs text-muted-foreground">Total orders</p>
                     </CardContent>
                 </Card>
                 <Card>
