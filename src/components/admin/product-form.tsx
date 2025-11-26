@@ -21,14 +21,14 @@ import type { Product } from '@/lib/definitions';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 const productSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters.'),
   description: z.string().min(10, 'Description must be at least 10 characters.'),
   price: z.coerce.number().min(0, 'Price must be a positive number.'),
   stock: z.coerce.number().min(0, 'Stock must be a positive number.'),
-  category: z.string().min(2, 'Category is required.'),
-  imageUrl: z.string().url('Must be a valid URL.'),
+  imageUrl: z.string().optional(), // Kept for existing data, but not shown as input
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -41,6 +41,8 @@ export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(product?.imageUrl || null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -50,26 +52,26 @@ export function ProductForm({ product }: ProductFormProps) {
           description: product.description,
           price: product.price,
           stock: product.stock,
-          category: product.category,
-          imageUrl: product.imageUrl,
         }
       : {
           name: '',
           description: '',
           price: 0,
           stock: 0,
-          category: '',
-          imageUrl: '',
         },
   });
 
   async function onSubmit(data: ProductFormValues) {
     setIsSubmitting(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Simulate API call for form data and file upload
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     
-    // In a real app, you'd call an API to save the data
-    console.log({ id: product?.id, ...data });
+    // In a real app, you'd upload the file and get a URL, then save it with the rest of the data.
+    const finalData = {
+        ...data,
+        imageUrl: imagePreview, // Use the previewed image.
+    };
+    console.log({ id: product?.id, ...finalData });
 
     setIsSubmitting(false);
 
@@ -81,6 +83,17 @@ export function ProductForm({ product }: ProductFormProps) {
     router.push('/admin/products');
   }
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -89,6 +102,35 @@ export function ProductForm({ product }: ProductFormProps) {
             <CardTitle>{product ? 'Edit Product' : 'Add a New Product'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <FormItem>
+              <FormLabel>Product Image</FormLabel>
+              <FormControl>
+                <div className="flex items-center gap-6">
+                    <div className="relative w-32 h-32 rounded-md border flex items-center justify-center bg-muted overflow-hidden">
+                        {imagePreview ? (
+                            <Image src={imagePreview} alt="Product preview" fill className="object-cover" />
+                        ) : (
+                            <span className="text-xs text-muted-foreground">No Image</span>
+                        )}
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                        Upload Image
+                    </Button>
+                    <Input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        className="hidden"
+                        accept="image/png, image/jpeg, image/gif"
+                        onChange={handleImageChange}
+                    />
+                </div>
+              </FormControl>
+              <FormDescription>
+                Upload an image for your product (JPG, PNG, GIF).
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+            
             <FormField
               control={form.control}
               name="name"
@@ -127,7 +169,7 @@ export function ProductForm({ product }: ProductFormProps) {
                   <FormItem>
                     <FormLabel>Price</FormLabel>
                     <FormControl>
-                      <Input type="number" placeholder="0.00" {...field} />
+                      <Input type="number" step="0.01" placeholder="0.00" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -147,35 +189,6 @@ export function ProductForm({ product }: ProductFormProps) {
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Furniture" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Image URL</FormLabel>
-                  <FormControl>
-                    <Input placeholder="https://example.com/image.jpg" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Link to the product image. Use a service like Unsplash or placehold.co.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
              <Button type="button" variant="outline" onClick={() => router.back()}>
