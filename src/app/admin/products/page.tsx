@@ -6,14 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { PlusCircle, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
 
 export default function AdminProductsPage() {
     return (
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <h1 className="font-headline text-3xl font-bold">Products</h1>
-                <Button>
-                    <PlusCircle className="mr-2 h-4 w-4" /> Add Product
+                <Button asChild>
+                    <Link href="/admin/products/add">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Product
+                    </Link>
                 </Button>
             </div>
 
@@ -67,7 +70,9 @@ export default function AdminProductsPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem>Edit</DropdownMenuItem>
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={`/admin/products/edit/${product.id}`}>Edit</Link>
+                                                </DropdownMenuItem>
                                                 <DropdownMenuItem>Delete</DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
