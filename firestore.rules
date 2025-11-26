@@ -1,0 +1,175 @@
+/**
+ * This ruleset enforces a security model for an e-commerce application with
+ * distinct roles for regular users and administrators.
+ *
+ * Core Philosophy:
+ * - Admin-Managed Public Data: Core catalog data like products and categories are
+ *   publicly readable by anyone, but can only be modified by administrators.
+ * - Strict User Data Ownership: All user-specific data (profiles, orders, etc.)
+ *   is strictly confined to that user's own data tree. A user can only access
+ *   their own information. Administrators are granted override access for
+ *   support and management purposes.
+ * - Secure by Default: Access is denied unless explicitly granted. Collections
+ *   that should not be managed by clients, like the admin role collection,
+ *   are locked down completely.
+ *
+ * Data Structure:
+ * - All user-private data is nested under `/users/{userId}`. This path-based
+ *   scoping is the primary mechanism for enforcing ownership.
+ * - Public data (e.g., `/products`, `/categories`) resides in top-level collections.
+ * - Admin roles are managed by checking for the existence of a document in the
+ *   `/roles_admin/{userId}` collection.
+ *
+ * Key Security Decisions:
+ * - Admin Role Management: The `/roles_admin` collection is not writable from
+ *   the client. Admin roles must be granted server-side (e.g., via a Cloud
+ *   Function or the Firebase Console) to prevent privilege escalation.
+ * - No User Listing: Regular users are not permitted to list all other users
+ *   in the system to protect user privacy.
+ * - Denormalization for Authorization: User and order documents contain the
+ *   necessary `userId` field to allow for fast, efficient security rules
+ *   without requiring slow and costly cross-document `get()` calls.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to abstract and reuse logic.
+    
+    /**
+     * Checks if the current request is from an authenticated user.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the authenticated user's UID matches the given userId.
+     * This is the foundation of the user-ownership model.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks if the user has an admin role.
+     * Admin status is granted if a document with the user's UID exists
+     * in the '/roles_admin' collection.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+    
+    /**
+     * Checks if the user is either the direct owner of the resource
+     * or an administrator.
+     */
+    function isOwnerOrAdmin(userId) {
+      return isOwner(userId) || isAdmin();
+    }
+    
+    /**
+     * Validates that the user's ID within the document data matches the
+     * user ID in the document path upon creation.
+     */
+    function isUserIdConsistentOnCreate(userId) {
+      return request.resource.data.userId == userId;
+    }
+
+    /**
+     * Enforces immutability of the user ID field on update.
+     */
+    function isUserIdImmutable() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    /**
+     * @description Publicly readable product catalog, writable only by admins.
+     * @path /products/{productId}
+     * @allow (get) Any user, signed in or not, can read a product's details.
+     * @deny (create) A regular, non-admin user cannot create a new product.
+     * @principle Public read access for catalog data, with centralized admin control for writes.
+     */
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin() && resource != null;
+    }
+    
+    /**
+     * @description Publicly readable category list, writable only by admins.
+     * @path /categories/{categoryId}
+     * @allow (get) Any user, signed in or not, can read a category's details.
+     * @deny (update) A regular, non-admin user cannot update a category.
+     * @principle Public read access for catalog data, with centralized admin control for writes.
+     */
+    match /categories/{categoryId} {
+      allow get, list: if true;
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin() && resource != null;
+    }
+
+    /**
+     * @description Stores user profiles. A user can create and manage their own
+     *   profile. Admins have full access. Regular users cannot list others.
+     * @path /users/{userId}
+     * @allow (create) auth.uid=user_123 can create the document at /users/user_123.
+     * @deny (get) auth.uid=user_456 cannot read the document at /users/user_123.
+     * @principle Enforces self-service profile management and admin oversight, while preventing user enumeration.
+     */
+    match /users/{userId} {
+      allow get: if isOwnerOrAdmin(userId);
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwnerOrAdmin(userId) && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isOwnerOrAdmin(userId) && resource != null;
+    }
+    
+    /**
+     * @description A user's collection of orders. Only accessible by the user
+     *   or an admin.
+     * @path /users/{userId}/orders/{orderId}
+     * @allow (create) auth.uid=user_123 can create an order in their own subcollection.
+     * @deny (list) auth.uid=user_456 cannot list orders for user_123.
+     * @principle Restricts access to a user's own data tree using path-based security.
+     */
+    match /users/{userId}/orders/{orderId} {
+      allow get, list: if isOwnerOrAdmin(userId);
+      allow create: if isOwnerOrAdmin(userId) && isUserIdConsistentOnCreate(userId);
+      allow update: if isOwnerOrAdmin(userId) && resource != null && isUserIdImmutable();
+      allow delete: if isOwnerOrAdmin(userId) && resource != null;
+    }
+    
+    /**
+     * @description The items within a specific order. Access is inherited from the
+     *   parent user path.
+     * @path /users/{userId}/orders/{orderId}/order_items/{orderItemId}
+     * @allow (get) auth.uid=user_123 can read an item from one of their own orders.
+     * @deny (get) auth.uid=user_456 cannot read an item from an order belonging to user_123.
+     * @principle Enforces deep path-based security for nested subcollections.
+     */
+    match /users/{userId}/orders/{orderId}/order_items/{orderItemId} {
+      allow get, list: if isOwnerOrAdmin(userId);
+      allow create: if isOwnerOrAdmin(userId);
+      allow update: if isOwnerOrAdmin(userId) && resource != null;
+      allow delete: if isOwnerOrAdmin(userId) && resource != null;
+    }
+    
+    /**
+     * @description Manages admin roles. Existence of a doc grants admin rights.
+     *   This collection is locked from all client-side writes to prevent
+     *   privilege escalation.
+     * @path /roles_admin/{userId}
+     * @allow (any) No client operation is ever permitted.
+     * @deny (create) A user cannot make themselves an admin.
+     * @principle Prevents self-assigned privilege escalation. Admin roles must be managed server-side.
+     */
+    match /roles_admin/{userId} {
+      allow get: if false;
+      allow list: if false;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
