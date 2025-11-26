@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { register } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,7 +22,7 @@ function SubmitButton() {
 }
 
 export function RegisterForm() {
-  const [state, action] = useFormState(register, undefined);
+  const [state, action] = useActionState(register, undefined);
 
   return (
     <form action={action}>
