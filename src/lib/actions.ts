@@ -1,9 +1,19 @@
 'use server';
 
 import { z } from 'zod';
-import { users } from '@/lib/data';
 import { setSession, clearSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { initializeApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
+
+// Initialize Firebase Admin SDK for server-side actions
+// Note: This is a simplified example. In production, you'd use a more secure way to initialize.
+// We are using CLIENT SDK here because ADMIN SDK is not available in this environment.
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -15,7 +25,6 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
-
 
 export async function login(prevState: any, formData: FormData) {
   const validatedFields = loginSchema.safeParse(
@@ -30,21 +39,27 @@ export async function login(prevState: any, formData: FormData) {
 
   const { email, password } = validatedFields.data;
 
-  const user = users.find(u => u.email === email && u.password === password);
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
 
-  if (!user) {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const userData = userDoc.data();
+
+    await setSession(user.uid);
+
+    if (userData?.role === 'ADMIN') {
+      redirect('/admin/dashboard');
+    }
+
+    redirect('/');
+  } catch (error: any) {
+    console.error('Login error:', error);
+    // You can customize error messages based on error.code
     return {
-      error: 'Invalid email or password.',
+      error: 'Invalid credentials. Please try again.',
     };
   }
-  
-  await setSession(user.id);
-  
-  if(user.role === 'ADMIN') {
-    redirect('/admin/dashboard');
-  }
-
-  redirect('/');
 }
 
 export async function register(prevState: any, formData: FormData) {
@@ -53,21 +68,37 @@ export async function register(prevState: any, formData: FormData) {
   );
 
   if (!validatedFields.success) {
-    // A real app would provide more detailed error messages.
     return {
       error: 'Invalid registration details. Please check your inputs.',
     };
   }
-  // In a real app, you would create a new user in the database.
-  // Here we just simulate success.
-  const newUser = { id: (users.length + 1).toString(), ...validatedFields.data, role: 'USER' as const };
-  
-  // For this demo, we'll log in the first user upon any successful registration.
-  await setSession(users[0].id);
-  
-  redirect('/');
-}
 
+  const { name, email, password } = validatedFields.data;
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    // Create a user document in Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      id: user.uid,
+      name: name,
+      email: email,
+      role: email.toLowerCase() === 'admin@admin.com' ? 'ADMIN' : 'USER',
+    });
+
+    // Log the user in
+    await setSession(user.uid);
+    redirect('/');
+
+  } catch (error: any) {
+    console.error('Registration error:', error);
+    if (error.code === 'auth/email-already-in-use') {
+      return { error: 'This email is already in use.' };
+    }
+    return { error: 'An error occurred during registration.' };
+  }
+}
 
 export async function logout() {
   await clearSession();

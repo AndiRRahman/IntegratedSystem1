@@ -1,10 +1,18 @@
 import { cookies } from 'next/headers';
-import { users } from '@/lib/data';
 import type { User } from '@/lib/definitions';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { firebaseConfig } from '@/firebase/config';
+
+// Ensure Firebase is initialized, but only once.
+if (!getApps().length) {
+    initializeApp(firebaseConfig);
+}
+const db = getFirestore();
 
 const SESSION_COOKIE_NAME = 'e-commers-v-session';
 
-export async function getSession() {
+export async function getSession(): Promise<User | null> {
   const cookieStore = cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -12,14 +20,16 @@ export async function getSession() {
     return null;
   }
 
-  const user = users.find(u => u.id === sessionId);
-
-  if (!user) {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', sessionId));
+    if (!userDoc.exists()) {
+        return null;
+    }
+    return userDoc.data() as User;
+  } catch (error) {
+    console.error("Failed to fetch user session from Firestore:", error);
     return null;
   }
-  
-  const { password, ...userWithoutPassword } = user;
-  return userWithoutPassword as User;
 }
 
 export async function setSession(userId: string) {

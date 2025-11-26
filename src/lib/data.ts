@@ -34,9 +34,11 @@ export const products: Product[] = [
   },
 ];
 
-export const users: (User & { password: string })[] = [
-  { id: '1', name: 'Alice', email: 'alice@example.com', password: 'password123', role: 'USER' },
-  { id: '2', name: 'Admin', email: 'admin@admin.com', password: 'AdminEcommervUMI', role: 'ADMIN' },
+// This mock data is no longer used for authentication but kept for reference or other potential uses.
+// The password property has been removed.
+export const users: User[] = [
+  { id: '1', name: 'Alice', email: 'alice@example.com', role: 'USER' },
+  { id: '2', name: 'Admin', email: 'admin@admin.com', role: 'ADMIN' },
 ];
 
 export const orders: Order[] = [
