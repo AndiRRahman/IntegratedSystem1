@@ -36,7 +36,7 @@ export const products: Product[] = [
 
 export const users: (User & { password: string })[] = [
   { id: '1', name: 'Alice', email: 'alice@example.com', password: 'password123', role: 'USER' },
-  { id: '2', name: 'Admin Bob', email: 'bob@example.com', password: 'adminpassword', role: 'ADMIN' },
+  { id: '2', name: 'Admin', email: 'admin@admin.com', password: 'AdminEcommervUMI', role: 'ADMIN' },
 ];
 
 export const orders: Order[] = [
