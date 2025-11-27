@@ -1,48 +1,17 @@
-
 'use server';
 
 import { z } from 'zod';
 import { setSession, clearSession, getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, connectFirestoreEmulator, collection, addDoc, serverTimestamp, writeBatch, updateDoc } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL, connectStorageEmulator } from 'firebase/storage';
-import { firebaseConfig } from '@/firebase/config';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth as clientAuth } from '@/firebase'; // Client SDK for sign-in
+import { adminAuth, adminDb } from '@/lib/firebase/admin'; // Admin SDK for verification
 import type { CartItem, Product } from './definitions';
+import { doc, setDoc, collection, serverTimestamp, writeBatch, updateDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// Initialize Firebase for SERVER-SIDE actions
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
-
-
-// Connect to emulators if in development
-// IMPORTANT: This block now ensures it only attempts to connect ONCE.
-if (process.env.NODE_ENV === 'development') {
-  try {
-    // @ts-ignore - _isInitialized is an internal flag to check connection status
-    if (!auth.__emulator) {
-      connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
-      // @ts-ignore
-      auth.__emulator = true;
-    }
-    // @ts-ignore - _settingsFrozen is an internal property
-    if (!db._settingsFrozen) {
-       connectFirestoreEmulator(db, '127.0.0.1', 8080);
-    }
-    // @ts-ignore - _isInitialized is an internal flag to check connection status
-    if (!storage.host.includes('localhost')) {
-       connectStorageEmulator(storage, "127.0.0.1", 9199);
-    }
-  } catch (e: any) {
-    // This can happen on hot-reloads, it's safe to ignore if it's about being already connected.
-    if (!e.message.includes('already connected')) {
-        console.error("Failed to connect server actions to emulator:", e);
-    }
-  }
-}
+// Initialize Client Storage for uploads
+const storage = getStorage(clientAuth.app);
 
 
 const loginSchema = z.object({
@@ -62,44 +31,51 @@ export async function login(prevState: any, formData: FormData) {
   );
 
   if (!validatedFields.success) {
-    return {
-      error: 'Invalid email or password.',
-    };
+    return { error: 'Invalid email or password.' };
   }
 
   const { email, password } = validatedFields.data;
 
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // 1. Authenticate user with Client SDK. This is the standard way.
+    const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
     const user = userCredential.user;
 
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userDocRef);
-    const userData = userDoc.data();
-    
-    // @ts-ignore - role is a custom claim we add
-    const finalUser = { uid: user.uid, role: userData?.role, name: userData?.name, email: userData?.email };
+    // 2. Use Admin SDK to get user data from Firestore (bypassing security rules)
+    const userDocRef = adminDb.collection('users').doc(user.uid);
+    const userDoc = await userDocRef.get();
 
+    if (!userDoc.exists) {
+      throw new Error('User data not found in Firestore.');
+    }
+    const userData = userDoc.data();
+
+    // 3. Create session with verified data
+    const finalUser = {
+      uid: user.uid,
+      role: userData?.role || 'USER',
+      name: userData?.name || 'User',
+      email: userData?.email || user.email,
+    };
     await setSession(finalUser);
-    
-    // @ts-ignore
+
+    // 4. Redirect
     if (finalUser.role === 'ADMIN') {
-        redirect('/admin/dashboard');
+      redirect('/admin/dashboard');
     } else {
-        redirect('/');
+      redirect('/');
     }
 
   } catch (error: any) {
     console.error('Login error:', error.code, error.message);
-    if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+    // Firebase Auth errors
+    if (error.code?.startsWith('auth/')) {
         return { error: 'Invalid credentials. Please try again.' };
     }
-    return {
-      error: 'An unexpected error occurred. Please try again.',
-    };
+    // Other errors
+    return { error: 'An unexpected error occurred. Please try again.' };
   }
 }
-
 
 export async function register(prevState: any, formData: FormData) {
   const validatedFields = registerSchema.safeParse(
@@ -114,46 +90,56 @@ export async function register(prevState: any, formData: FormData) {
   const { name, email, password } = validatedFields.data;
 
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
+    // Use Admin SDK to create the user. This gives us more control.
+    const userRecord = await adminAuth.createUser({
+      email,
+      password,
+      displayName: name,
+      emailVerified: true, // Let's assume verified for simplicity
+    });
+    
     const isAdmin = email.toLowerCase() === 'admin@admin.com';
+    const batch = adminDb.batch();
 
-    const batch = writeBatch(db);
-
-    const userDocRef = doc(db, 'users', user.uid);
+    // Create user document in 'users' collection
+    const userDocRef = adminDb.collection('users').doc(userRecord.uid);
     const userData = {
-      id: user.uid,
+      id: userRecord.uid,
       name: name,
       email: email,
       role: isAdmin ? 'ADMIN' : 'USER',
-      createdAt: serverTimestamp(),
+      createdAt: new Date().toISOString(),
     };
     batch.set(userDocRef, userData);
 
+    // If admin, create a document in 'roles_admin' collection for security rules
     if (isAdmin) {
-      const adminRoleRef = doc(db, 'roles_admin', user.uid);
+      const adminRoleRef = adminDb.collection('roles_admin').doc(userRecord.uid);
       batch.set(adminRoleRef, { active: true });
     }
     
     await batch.commit();
-    
-    const finalUser = { uid: user.uid, role: userData.role, name: userData.name, email: userData.email };
 
-    await setSession(finalUser);
+    // Set the session for the newly created user
+    await setSession({
+      uid: userRecord.uid,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role,
+    });
     
     if (isAdmin) {
-        redirect('/admin/dashboard');
+      redirect('/admin/dashboard');
     } else {
-        redirect('/');
+      redirect('/');
     }
     
   } catch (error: any) {
     console.error('Registration error:', error.code, error.message);
-    if (error.code === 'auth/email-already-in-use') {
+    if (error.code === 'auth/email-already-exists') {
       return { error: 'This email is already registered.' };
     }
-    return { error: 'An error occurred during registration.' };
+    return { error: 'An error occurred during registration. Please try again.' };
   }
 }
 
@@ -166,7 +152,6 @@ export async function logout() {
 
 export async function createOrder(cartItems: CartItem[], totalAmount: number) {
   const session = await getSession();
-
   if (!session) {
     return { error: "You must be logged in to place an order." };
   }
@@ -176,10 +161,7 @@ export async function createOrder(cartItems: CartItem[], totalAmount: number) {
   }
 
   try {
-    const batch = writeBatch(db);
-
-    const newOrderRef = doc(collection(db, "orders"));
-
+    const newOrderRef = adminDb.collection("orders").doc();
     const newOrderData = {
       id: newOrderRef.id,
       userId: session.id,
@@ -190,20 +172,17 @@ export async function createOrder(cartItems: CartItem[], totalAmount: number) {
         productId: item.product.id,
         quantity: item.quantity,
         price: item.product.price,
-        product: { // denormalize product info for display
+        product: {
             name: item.product.name,
             imageUrl: item.product.imageUrl
         }
       })),
       total: totalAmount,
       status: 'Pending',
-      orderDate: serverTimestamp(),
+      orderDate: new Date(),
     };
 
-    batch.set(newOrderRef, newOrderData);
-    
-    await batch.commit();
-    
+    await newOrderRef.set(newOrderData);
     return { success: true, orderId: newOrderRef.id };
 
   } catch (error) {
@@ -214,26 +193,23 @@ export async function createOrder(cartItems: CartItem[], totalAmount: number) {
 
 export async function upsertProduct(productData: Partial<Product>) {
   const session = await getSession();
-  // @ts-ignore
   if (!session || session.role !== 'ADMIN') {
     return { error: 'Unauthorized' };
   }
 
   try {
     if (productData.id) {
-      // Update existing product
-      const productRef = doc(db, 'products', productData.id);
-      await updateDoc(productRef, productData);
+      const productRef = adminDb.collection('products').doc(productData.id);
+      await productRef.update({ ...productData });
       return { success: true, id: productData.id };
     } else {
-      // Create new product
-      const newProductRef = doc(collection(db, 'products'));
+      const newProductRef = adminDb.collection('products').doc();
       const newProduct = {
         ...productData,
         id: newProductRef.id,
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       };
-      await setDoc(newProductRef, newProduct);
+      await newProductRef.set(newProduct);
       return { success: true, id: newProductRef.id };
     }
   } catch (error) {
@@ -271,5 +247,3 @@ export async function uploadProductImage(formData: FormData) {
     return { error: 'Failed to upload image.' };
   }
 }
-
-    

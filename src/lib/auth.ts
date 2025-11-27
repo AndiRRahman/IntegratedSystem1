@@ -1,4 +1,3 @@
-
 import { cookies } from 'next/headers';
 import type { User } from '@/lib/definitions';
 import { SignJWT, jwtVerify } from 'jose';
@@ -22,7 +21,6 @@ export async function getSession(): Promise<User | null> {
   }
 }
 
-// The user object passed here now comes from `actions.ts` after DB lookup
 export async function setSession(user: { uid: string, name?: string | null, email?: string | null, role?: 'USER' | 'ADMIN' }) {
   const expirationTime = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   
@@ -37,7 +35,7 @@ export async function setSession(user: { uid: string, name?: string | null, emai
   const token = await new SignJWT(sessionPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d') // Can be short like '2h' or '7d'
+    .setExpirationTime('7d')
     .sign(secretKey);
 
   cookies().set(SESSION_COOKIE_NAME, token, {
@@ -45,11 +43,10 @@ export async function setSession(user: { uid: string, name?: string | null, emai
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    sameSite: 'lax', // Recommended for security
+    sameSite: 'lax',
   });
 }
 
 export async function clearSession() {
-  // Set the cookie to an empty value and expire it immediately
   cookies().set(SESSION_COOKIE_NAME, '', { expires: new Date(0), path: '/' });
 }
