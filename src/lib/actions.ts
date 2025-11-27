@@ -1,17 +1,25 @@
+
 'use server';
 
 import { z } from 'zod';
 import { setSession, clearSession, getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth as clientAuth } from '@/firebase'; // Client SDK for sign-in
-import { adminAuth, adminDb } from '@/lib/firebase/admin'; // Admin SDK for verification
+import { adminAuth, adminDb } from '@/lib/firebase/admin'; // Hanya gunakan Admin SDK di server
 import type { CartItem, Product } from './definitions';
-import { doc, setDoc, collection, serverTimestamp, writeBatch, updateDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
+import { getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
-// Initialize Client Storage for uploads
-const storage = getStorage(clientAuth.app);
+
+// Helper untuk inisialisasi Client SDK di dalam Server Action jika diperlukan (HANYA untuk login)
+// Ini adalah kasus khusus karena Admin SDK tidak punya cara untuk memvalidasi password secara langsung.
+function initializeClientSdk() {
+  if (getApps().some(app => app.name === 'client-sdk-in-server')) {
+    return getApp('client-sdk-in-server');
+  }
+  return initializeApp(firebaseConfig, 'client-sdk-in-server');
+}
 
 
 const loginSchema = z.object({
@@ -37,11 +45,15 @@ export async function login(prevState: any, formData: FormData) {
   const { email, password } = validatedFields.data;
 
   try {
-    // 1. Authenticate user with Client SDK. This is the standard way.
+    // 1. Inisialisasi Client SDK khusus untuk tindakan ini
+    const clientApp = initializeClientSdk();
+    const clientAuth = getClientAuth(clientApp);
+
+    // 2. Autentikasi dengan Client SDK untuk memvalidasi password
     const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
     const user = userCredential.user;
 
-    // 2. Use Admin SDK to get user data from Firestore (bypassing security rules)
+    // 3. Gunakan Admin SDK untuk mendapatkan data lengkap dan peran dari Firestore
     const userDocRef = adminDb.collection('users').doc(user.uid);
     const userDoc = await userDocRef.get();
 
@@ -50,7 +62,7 @@ export async function login(prevState: any, formData: FormData) {
     }
     const userData = userDoc.data();
 
-    // 3. Create session with verified data
+    // 4. Buat sesi dengan data yang diverifikasi
     const finalUser = {
       uid: user.uid,
       role: userData?.role || 'USER',
@@ -59,7 +71,7 @@ export async function login(prevState: any, formData: FormData) {
     };
     await setSession(finalUser);
 
-    // 4. Redirect
+    // 5. Redirect dari Server Action
     if (finalUser.role === 'ADMIN') {
       redirect('/admin/dashboard');
     } else {
@@ -68,11 +80,9 @@ export async function login(prevState: any, formData: FormData) {
 
   } catch (error: any) {
     console.error('Login error:', error.code, error.message);
-    // Firebase Auth errors
     if (error.code?.startsWith('auth/')) {
         return { error: 'Invalid credentials. Please try again.' };
     }
-    // Other errors
     return { error: 'An unexpected error occurred. Please try again.' };
   }
 }
@@ -90,18 +100,17 @@ export async function register(prevState: any, formData: FormData) {
   const { name, email, password } = validatedFields.data;
 
   try {
-    // Use Admin SDK to create the user. This gives us more control.
+    // Gunakan Admin SDK untuk membuat pengguna, ini sudah benar.
     const userRecord = await adminAuth.createUser({
       email,
       password,
       displayName: name,
-      emailVerified: true, // Let's assume verified for simplicity
+      emailVerified: true,
     });
     
     const isAdmin = email.toLowerCase() === 'admin@admin.com';
     const batch = adminDb.batch();
 
-    // Create user document in 'users' collection
     const userDocRef = adminDb.collection('users').doc(userRecord.uid);
     const userData = {
       id: userRecord.uid,
@@ -112,7 +121,6 @@ export async function register(prevState: any, formData: FormData) {
     };
     batch.set(userDocRef, userData);
 
-    // If admin, create a document in 'roles_admin' collection for security rules
     if (isAdmin) {
       const adminRoleRef = adminDb.collection('roles_admin').doc(userRecord.uid);
       batch.set(adminRoleRef, { active: true });
@@ -120,7 +128,6 @@ export async function register(prevState: any, formData: FormData) {
     
     await batch.commit();
 
-    // Set the session for the newly created user
     await setSession({
       uid: userRecord.uid,
       name: userData.name,
@@ -230,6 +237,9 @@ export async function uploadProductImage(formData: FormData) {
   }
 
   try {
+    const clientApp = initializeClientSdk();
+    const storage = getStorage(clientApp);
+
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const fileExtension = file.name.split('.').pop();
     const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}.${fileExtension}`;
