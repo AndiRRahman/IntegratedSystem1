@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
-import { DollarSign, Package, Users, CreditCard } from 'lucide-react';
-import { orders } from '@/lib/data';
+import { DollarSign, Package, Users, CreditCard, Loader2 } from 'lucide-react';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Order } from '@/lib/definitions';
 
 const initialSalesData = [
   { name: 'Jan', total: 0 }, { name: 'Feb', total: 0 },
@@ -16,7 +18,17 @@ const initialSalesData = [
 
 export default function AdminDashboardPage() {
     const [salesData, setSalesData] = useState(initialSalesData);
-    const totalOrders = orders.length;
+    const firestore = useFirestore();
+
+    const ordersQuery = useMemoFirebase(
+      () => firestore ? collection(firestore, 'orders') : null,
+      [firestore]
+    );
+
+    const { data: orders, isLoading: isLoadingOrders } = useCollection<Order>(ordersQuery);
+
+    const totalOrders = orders?.length ?? 0;
+    const totalRevenue = orders?.reduce((acc, order) => acc + order.total, 0) ?? 0;
 
     useEffect(() => {
         const generatedData = initialSalesData.map(item => ({
@@ -36,7 +48,7 @@ export default function AdminDashboardPage() {
                         <DollarSign className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">$45,231.89</div>
+                        {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>}
                         <p className="text-xs text-muted-foreground">+20.1% from last month</p>
                     </CardContent>
                 </Card>
@@ -46,7 +58,7 @@ export default function AdminDashboardPage() {
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">+{totalOrders}</div>
+                        {isLoadingOrders ? <Loader2 className="h-6 w-6 animate-spin" /> : <div className="text-2xl font-bold">+{totalOrders}</div> }
                         <p className="text-xs text-muted-foreground">Total orders</p>
                     </CardContent>
                 </Card>

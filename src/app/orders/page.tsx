@@ -1,12 +1,14 @@
+'use client';
 
 import MainLayout from '@/components/shared/main-layout';
-import { getSession } from '@/lib/auth';
-import { orders } from '@/lib/data';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { Order } from '@/lib/definitions';
 import Image from 'next/image';
+import { Loader2 } from 'lucide-react';
 
 function getStatusVariant(status: Order['status']) {
   switch (status) {
@@ -19,22 +21,37 @@ function getStatusVariant(status: Order['status']) {
   }
 }
 
-export default async function OrdersPage() {
-  const session = await getSession();
-  // Logika filter dipindahkan ke sini
-  const userOrders = session ? orders.filter(o => o.userId === session.id) : [];
+export default function OrdersPage() {
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const ordersQuery = useMemoFirebase(
+    () => 
+      firestore && user
+        ? query(collection(firestore, 'orders'), where('userId', '==', user.uid))
+        : null,
+    [firestore, user]
+  );
+  
+  const { data: userOrders, isLoading } = useCollection<Order>(ordersQuery);
 
   return (
     <MainLayout>
       <h1 className="font-headline text-3xl font-bold mb-8">My Orders</h1>
-      {userOrders.length > 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      ) : userOrders && userOrders.length > 0 ? (
         <div className="space-y-6">
           {userOrders.map(order => (
             <Card key={order.id}>
               <CardHeader className="flex flex-row justify-between items-start">
                 <div>
-                  <CardTitle>Order #{order.id.split('-')[1]}</CardTitle>
-                  <CardDescription>Date: {new Date(order.orderDate).toLocaleDateString()}</CardDescription>
+                  <CardTitle>Order #{order.id.substring(0, 7)}</CardTitle>
+                  <CardDescription>
+                    Date: {order.orderDate ? new Date(order.orderDate.seconds * 1000).toLocaleDateString() : 'N/A'}
+                  </CardDescription>
                 </div>
                 <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
               </CardHeader>
