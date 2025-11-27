@@ -90,14 +90,22 @@ export async function register(prevState: any, formData: FormData) {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
+    const isAdmin = email.toLowerCase() === 'admin@admin.com';
 
     // Create a user document in Firestore
     await setDoc(doc(db, 'users', user.uid), {
       id: user.uid,
       name: name,
       email: email,
-      role: email.toLowerCase() === 'admin@admin.com' ? 'ADMIN' : 'USER',
+      role: isAdmin ? 'ADMIN' : 'USER',
     });
+
+    // If admin, create a role document for security rules
+    if (isAdmin) {
+      await setDoc(doc(db, 'roles_admin', user.uid), {
+        created: new Date().toISOString(),
+      });
+    }
 
     // Log the user in
     await setSession(user.uid);

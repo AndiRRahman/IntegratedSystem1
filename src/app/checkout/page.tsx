@@ -92,7 +92,7 @@ export default function CheckoutPage() {
           <CardHeader>
             <CardTitle>Order Summary</CardTitle>
             <CardDescription>Review your items before proceeding.</CardDescription>
-          </CardHeader>
+          </Header>
           <CardContent className="space-y-4">
             {cartItems.length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">Your cart is empty.</p>
