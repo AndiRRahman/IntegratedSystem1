@@ -1,9 +1,11 @@
+'use client';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { Product, User } from '@/lib/definitions';
+import type { Product } from '@/lib/definitions';
 import { ShoppingCart } from 'lucide-react';
+import type { User } from 'firebase/auth';
 
 export function ProductCard({ product, session }: { product: Product, session: User | null }) {
   const linkHref = session ? `/products/${product.id}` : '/login';
@@ -17,7 +19,8 @@ export function ProductCard({ product, session }: { product: Product, session: U
             alt={product.name}
             fill
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            data-ai-hint={product.imageHint}
+            data-ai-hint={product.imageHint || ''}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
         </Link>
       </CardHeader>

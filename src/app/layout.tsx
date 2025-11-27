@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { Providers } from './providers';
+import { FirebaseClientProvider } from '@/firebase';
+import { CartProvider } from '@/context/cart-provider';
 
 export const metadata: Metadata = {
   title: 'E-Commers V',
@@ -22,9 +23,11 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet" />
       </head>
       <body className="font-body antialiased min-h-screen flex flex-col">
-        <Providers>
-          {children}
-        </Providers>
+        <FirebaseClientProvider>
+          <CartProvider>
+            {children}
+          </CartProvider>
+        </FirebaseClientProvider>
         <Toaster />
       </body>
     </html>

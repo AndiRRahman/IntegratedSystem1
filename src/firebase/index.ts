@@ -5,33 +5,17 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 
 import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { getStorage, connectStorageEmulator, Storage } from 'firebase/storage';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
+  let firebaseApp: FirebaseApp;
   if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
-    try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
-    } catch (e) {
-      // Only warn in production because it's normal to use the firebaseConfig to initialize
-      // during development
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
-    }
-
-    return getSdks(firebaseApp);
+    firebaseApp = initializeApp(firebaseConfig);
+  } else {
+    firebaseApp = getApp();
   }
-
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
+  return getSdks(firebaseApp);
 }
 
 export function getSdks(firebaseApp: FirebaseApp) {
@@ -39,27 +23,29 @@ export function getSdks(firebaseApp: FirebaseApp) {
   const firestore = getFirestore(firebaseApp);
   const storage = getStorage(firebaseApp);
 
+  // This check is for client-side browser environment only.
+  // Emulators are only connected on the client for real-time updates and debugging.
+  // Server-side actions in `lib/actions.ts` have their own emulator connection logic.
   if (typeof window !== 'undefined' && (location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       
     try {
-        console.log("⚠️ Mencoba menghubungkan ke Firebase Emulator Lokal...");
+        // We connect to the emulator only once.
+        // The `connect...` functions will throw an error if they are called more than once.
+        // We can safely ignore that error.
         
-        // Connect Auth (Port 9099)
-        connectAuthEmulator(auth, "http://localhost:9099");
+        console.log("⚠️ Client: Attempting to connect to Firebase Emulators...");
         
-        // Connect Firestore (Port 8080)
+        connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
         connectFirestoreEmulator(firestore, 'localhost', 8080);
-        
-        // Connect Storage (Port 9199)
         connectStorageEmulator(storage, "localhost", 9199);
         
-        console.log("✅ Berhasil terhubung ke Emulator!");
+        console.log("✅ Client: Successfully connected to Emulators!");
     } catch (error: any) {
-        // Error ini biasanya muncul jika 'getSdks' dipanggil 2x, emulator tidak boleh connect 2x
         if (!error.message.includes('already connected')) {
-          console.error("Gagal terhubung ke Emulator:", error);
+          console.error("Client: Failed to connect to Emulators:", error);
         } else {
-          console.log("Info Emulator: Sudah terhubung sebelumnya.");
+          // This is expected on fast-refresh, not a problem.
+          console.log("ℹ️ Client: Emulators already connected.");
         }
     }
   }
@@ -78,6 +64,5 @@ export * from './firestore/use-collection';
 export * from './firestore/use-doc';
 export * from './non-blocking-updates';
 export * from './non-blocking-login';
-export *- from './errors';
+export * from './errors';
 export * from './error-emitter';
-

@@ -1,15 +1,27 @@
-import { getSession } from '@/lib/auth';
+'use client';
+
+import { useUser } from '@/firebase';
 import { redirect } from 'next/navigation';
 import { AdminSidebar } from '@/components/admin/admin-sidebar';
+import { Loader2 } from 'lucide-react';
 
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
+  const { user, isUserLoading } = useUser();
 
-  if (!session || session.role !== 'ADMIN') {
+  if (isUserLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // @ts-ignore - role is a custom claim we add
+  if (!user || user.role !== 'ADMIN') {
     redirect('/login');
   }
 

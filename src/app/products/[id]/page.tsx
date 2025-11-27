@@ -1,12 +1,48 @@
-import MainLayout from '@/components/shared/main-layout';
-import { products } from '@/lib/data';
-import { notFound } from 'next/navigation';
-import Image from 'next/image';
-import { Star } from 'lucide-react';
-import { AddToCartButton } from '@/components/cart/add-to-cart-button';
+'use client';
 
-export default async function ProductDetailPage({ params }: { params: { id: string } }) {
-  const product = products.find(p => p.id === params.id);
+import MainLayout from '@/components/shared/main-layout';
+import { notFound, useParams } from 'next/navigation';
+import Image from 'next/image';
+import { Star, Loader2 } from 'lucide-react';
+import { AddToCartButton } from '@/components/cart/add-to-cart-button';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Product } from '@/lib/definitions';
+import { Skeleton } from '@/components/ui/skeleton';
+
+function ProductDetailSkeleton() {
+  return (
+    <MainLayout>
+       <div className="grid md:grid-cols-2 gap-8 lg:gap-16">
+          <Skeleton className="aspect-square rounded-lg" />
+          <div className="flex flex-col justify-center space-y-4">
+              <Skeleton className="h-4 w-1/4" />
+              <Skeleton className="h-10 w-3/4" />
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-12 w-1/3" />
+              <Skeleton className="h-12 w-1/2" />
+          </div>
+       </div>
+    </MainLayout>
+  )
+}
+
+export default function ProductDetailPage() {
+  const params = useParams();
+  const id = params.id as string;
+  const firestore = useFirestore();
+
+  const productRef = useMemoFirebase(
+    () => (firestore && id ? doc(firestore, 'products', id) : null),
+    [firestore, id]
+  );
+  
+  const { data: product, isLoading } = useDoc<Product>(productRef);
+
+  if (isLoading) {
+    return <ProductDetailSkeleton />;
+  }
 
   if (!product) {
     notFound();
@@ -21,7 +57,7 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
             alt={product.name}
             fill
             className="object-cover"
-            data-ai-hint={product.imageHint}
+            data-ai-hint={product.imageHint || ''}
           />
         </div>
         <div className="flex flex-col justify-center">
