@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -15,10 +16,12 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Connect to emulators if in development
-// NOTE: This check might be fragile. A more robust solution uses environment variables.
 if (process.env.NODE_ENV === 'development') {
   try {
-    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    // @ts-ignore - _isInitialized is an internal flag
+    if (!auth._isInitialized) {
+      connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    }
     // @ts-ignore - _settingsFrozen is an internal property
     if (!db._settingsFrozen) {
        connectFirestoreEmulator(db, '127.0.0.1', 8080);
@@ -59,10 +62,14 @@ export async function login(prevState: any, formData: FormData) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    const userDocRef = doc(db, 'users', user.uid);
+    const userDoc = await getDoc(userDocRef);
     const userData = userDoc.data();
+    
+    // @ts-ignore
+    const finalUser = { ...user, role: userData?.role, name: userData?.name, email: userData?.email };
 
-    await setSession(user.uid);
+    await setSession(finalUser);
 
     if (userData?.role === 'ADMIN') {
       redirect('/admin/dashboard');
@@ -70,7 +77,7 @@ export async function login(prevState: any, formData: FormData) {
 
     redirect('/');
   } catch (error: any) {
-    console.error('Login error:', error.code);
+    console.error('Login error:', error.code, error.message);
     return {
       error: 'Invalid credentials. Please try again.',
     };
@@ -90,29 +97,22 @@ export async function register(prevState: any, formData: FormData) {
   const { name, email, password } = validatedFields.data;
 
   try {
-    // Check if user with this email already exists
-    const q = query(collection(db, "users"), where("email", "==", email));
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-        return { error: 'This email is already in use.' };
-    }
-
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
     const isAdmin = email.toLowerCase() === 'admin@admin.com';
 
-    // Use a batch to write to users and roles_admin atomically
     const batch = writeBatch(db);
 
     const userDocRef = doc(db, 'users', user.uid);
-    batch.set(userDocRef, {
+    const userData = {
       id: user.uid,
       name: name,
       email: email,
       role: isAdmin ? 'ADMIN' : 'USER',
       createdAt: serverTimestamp(),
-    });
+    };
+    batch.set(userDocRef, userData);
 
     if (isAdmin) {
       const adminRoleRef = doc(db, 'roles_admin', user.uid);
@@ -120,8 +120,11 @@ export async function register(prevState: any, formData: FormData) {
     }
     
     await batch.commit();
+    
+    // @ts-ignore
+    const finalUser = { ...user, role: userData.role, name: userData.name, email: userData.email };
 
-    await setSession(user.uid);
+    await setSession(finalUser);
     redirect('/');
 
   } catch (error: any) {
@@ -153,28 +156,33 @@ export async function createOrder(cartItems: CartItem[], totalAmount: number) {
   try {
     const batch = writeBatch(db);
 
+    const newOrderRef = doc(collection(db, "orders"));
+
     const newOrderData = {
+      id: newOrderRef.id,
       userId: session.id,
       customerName: session.name, 
       customerEmail: session.email, 
       shippingAddress: "123 Main St, Demo City", // Mock address
-      items: cartItems.map(item => ({...item})), // Create plain objects
+      items: cartItems.map(item => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        price: item.product.price,
+        product: { // denormalize product info for display
+            name: item.product.name,
+            imageUrl: item.product.imageUrl
+        }
+      })),
       total: totalAmount,
       status: 'Pending',
       orderDate: serverTimestamp(),
     };
 
-    // 1. Add to user's specific order collection
-    const userOrderRef = doc(collection(db, "users", session.id, "orders"));
-    batch.set(userOrderRef, newOrderData);
-
-    // 2. Add to global orders collection for admin view
-    const globalOrderRef = doc(collection(db, "orders"));
-    batch.set(globalOrderRef, { ...newOrderData, id: globalOrderRef.id }); // Add id to global order
-
+    batch.set(newOrderRef, newOrderData);
+    
     await batch.commit();
     
-    return { success: true, orderId: userOrderRef.id };
+    return { success: true, orderId: newOrderRef.id };
 
   } catch (error) {
     console.error("Checkout error:", error);
