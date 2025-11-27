@@ -20,8 +20,8 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (cartItems.length === 0 && !isSuccess) {
-      // Biarkan pengguna melihat pesan "cart is empty"
-      // Atau bisa redirect: router.push('/cart');
+      // Allow user to see "cart is empty" message, or redirect
+      // router.push('/cart');
     }
   }, [cartItems, isSuccess, router]);
 
@@ -58,29 +58,29 @@ export default function CheckoutPage() {
 
   if (isSuccess) {
     return (
-        <MainLayout>
-          <div className="max-w-2xl mx-auto py-16">
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle className="font-headline text-3xl text-green-600">Order Confirmed!</CardTitle>
-                <CardDescription>Thank you for your purchase.</CardDescription>
-              </CardHeader>
-              <CardContent className="text-center space-y-6">
-                <p className="text-muted-foreground">
-                  Your order has been successfully recorded in our system.
-                </p>
-                <div className="flex justify-center gap-4">
-                  <Button asChild>
-                    <Link href="/">Continue Shopping</Link>
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href="/orders">View My Orders</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </MainLayout>
+      <MainLayout>
+        <div className="max-w-2xl mx-auto py-16">
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="font-headline text-3xl text-green-600">Order Confirmed!</CardTitle>
+              <CardDescription>Thank you for your purchase.</CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-6">
+              <p className="text-muted-foreground">
+                Your order has been successfully recorded in our system.
+              </p>
+              <div className="flex justify-center gap-4">
+                <Button asChild>
+                  <Link href="/">Continue Shopping</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/orders">View My Orders</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </MainLayout>
     );
   }
 
@@ -92,7 +92,7 @@ export default function CheckoutPage() {
           <CardHeader>
             <CardTitle>Order Summary</CardTitle>
             <CardDescription>Review your items before proceeding.</CardDescription>
-          </Header>
+          </CardHeader>
           <CardContent className="space-y-4">
             {cartItems.length === 0 ? (
                 <p className="text-center text-muted-foreground py-4">Your cart is empty.</p>
