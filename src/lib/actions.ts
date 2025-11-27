@@ -268,3 +268,5 @@ export async function uploadProductImage(formData: FormData) {
     return { error: 'Failed to upload image.' };
   }
 }
+
+    
