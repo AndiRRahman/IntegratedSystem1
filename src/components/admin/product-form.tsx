@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -22,13 +23,14 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { uploadProductImage, upsertProduct } from '@/lib/actions';
 
 const productSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters.'),
   description: z.string().min(10, 'Description must be at least 10 characters.'),
   price: z.coerce.number().min(0, 'Price must be a positive number.'),
   stock: z.coerce.number().min(0, 'Stock must be a positive number.'),
-  imageUrl: z.string().optional(), // Kept for existing data, but not shown as input
+  imageUrl: z.string().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -41,6 +43,7 @@ export function ProductForm({ product }: ProductFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
   const [imagePreview, setImagePreview] = React.useState<string | null>(product?.imageUrl || null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -52,40 +55,74 @@ export function ProductForm({ product }: ProductFormProps) {
           description: product.description,
           price: product.price,
           stock: product.stock,
+          imageUrl: product.imageUrl,
         }
       : {
           name: '',
           description: '',
           price: 0,
           stock: 0,
+          imageUrl: 'https://placehold.co/600x400/EEE/31343C',
         },
   });
 
   async function onSubmit(data: ProductFormValues) {
     setIsSubmitting(true);
-    // Simulate API call for form data and file upload
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    // In a real app, you'd upload the file and get a URL, then save it with the rest of the data.
-    const finalData = {
+    let finalImageUrl = product?.imageUrl;
+
+    try {
+      // 1. Upload image if a new one is selected
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('file', imageFile);
+        const uploadResult = await uploadProductImage(formData);
+
+        if (uploadResult.error || !uploadResult.url) {
+          throw new Error(uploadResult.error || 'Image upload failed');
+        }
+        finalImageUrl = uploadResult.url;
+      }
+      
+      if (!finalImageUrl) {
+          throw new Error('Product image is required.');
+      }
+
+      // 2. Prepare product data
+      const productPayload: Partial<Product> = {
         ...data,
-        imageUrl: imagePreview, // Use the previewed image.
-    };
-    console.log({ id: product?.id, ...finalData });
+        id: product?.id, // Include ID if editing
+        imageUrl: finalImageUrl,
+      };
 
-    setIsSubmitting(false);
+      // 3. Save product data to Firestore
+      const saveResult = await upsertProduct(productPayload);
+      if (saveResult.error) {
+        throw new Error(saveResult.error);
+      }
+      
+      toast({
+        title: product ? 'Product Updated' : 'Product Created',
+        description: `The product "${data.name}" has been successfully saved.`,
+      });
+      router.push('/admin/products');
+      router.refresh(); // Refresh server components to show new product
 
-    toast({
-      title: product ? 'Product Updated' : 'Product Created',
-      description: `The product "${data.name}" has been successfully saved.`,
-    });
-
-    router.push('/admin/products');
+    } catch (error: any) {
+      console.error("Failed to save product:", error);
+      toast({
+        title: 'Error',
+        description: error.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);

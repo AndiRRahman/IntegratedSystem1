@@ -1,3 +1,4 @@
+
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
@@ -5,7 +6,7 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 
 import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator, Firestore } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator, Storage } from 'firebase/storage';
+import { getStorage, connectStorageEmulator } from 'firebase/storage';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
@@ -35,9 +36,22 @@ export function getSdks(firebaseApp: FirebaseApp) {
         
         console.log("⚠️ Client: Attempting to connect to Firebase Emulators...");
         
-        connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
-        connectFirestoreEmulator(firestore, 'localhost', 8080);
-        connectStorageEmulator(storage, "localhost", 9199);
+        // @ts-ignore
+        if (!auth.__emulator) {
+            connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+            // @ts-ignore
+            auth.__emulator = true;
+        }
+
+        // @ts-ignore
+        if (!firestore._settings.host) {
+            connectFirestoreEmulator(firestore, 'localhost', 8080);
+        }
+
+        // @ts-ignore
+        if (!storage.host.includes('localhost')) {
+            connectStorageEmulator(storage, "localhost", 9199);
+        }
         
         console.log("✅ Client: Successfully connected to Emulators!");
     } catch (error: any) {
