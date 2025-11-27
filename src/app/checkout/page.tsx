@@ -18,12 +18,12 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Cegah akses checkout jika keranjang kosong (kecuali sudah sukses)
   useEffect(() => {
     if (cartItems.length === 0 && !isSuccess) {
-        // Redirect atau biarkan tampil pesan kosong
+      // Biarkan pengguna melihat pesan "cart is empty"
+      // Atau bisa redirect: router.push('/cart');
     }
-  }, [cartItems, isSuccess]);
+  }, [cartItems, isSuccess, router]);
 
   const handleCheckout = async () => {
     setIsSubmitting(true);
@@ -38,8 +38,8 @@ export default function CheckoutPage() {
           variant: "destructive"
         });
       } else {
-        clearCart(); // Kosongkan keranjang lokal
-        setIsSuccess(true); // Tampilkan status sukses
+        clearCart();
+        setIsSuccess(true);
         toast({
           title: "Success",
           description: "Order placed successfully!",
