@@ -1,3 +1,4 @@
+
 import MainLayout from '@/components/shared/main-layout';
 import { getSession } from '@/lib/auth';
 import { orders } from '@/lib/data';
@@ -20,7 +21,8 @@ function getStatusVariant(status: Order['status']) {
 
 export default async function OrdersPage() {
   const session = await getSession();
-  const userOrders = orders.filter(o => o.userId === session?.id);
+  // Logika filter dipindahkan ke sini
+  const userOrders = session ? orders.filter(o => o.userId === session.id) : [];
 
   return (
     <MainLayout>

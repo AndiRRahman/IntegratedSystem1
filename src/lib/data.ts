@@ -37,8 +37,7 @@ export const products: Product[] = [
 // This mock data is no longer used for authentication but kept for reference or other potential uses.
 // The password property has been removed.
 export const users: User[] = [
-  { id: '1', name: 'Alice', email: 'alice@example.com', role: 'USER' },
-  { id: '2', name: 'Admin', email: 'admin@admin.com', role: 'ADMIN' },
+  // Array dikosongkan karena otentikasi ditangani oleh Firebase
 ];
 
 export const orders: Order[] = [
