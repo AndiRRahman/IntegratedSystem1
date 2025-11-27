@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import type { User } from '@/lib/definitions';
-import { initializeApp, getApps } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 

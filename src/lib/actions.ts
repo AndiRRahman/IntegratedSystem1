@@ -7,7 +7,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, connectFirestoreEmulator, collection, addDoc } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
-import { CartItem } from './definitions';
+import type { CartItem } from './definitions';
 
 // Initialize Firebase Admin SDK for server-side actions
 // Note: This is a simplified example. In production, you'd use a more secure way to initialize.
