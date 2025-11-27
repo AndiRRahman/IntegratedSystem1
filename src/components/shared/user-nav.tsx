@@ -1,3 +1,4 @@
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,9 +13,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from 'next/link'
 import { LayoutDashboard, LogOut, Package, User as UserIcon } from 'lucide-react'
 import { logout } from '@/lib/actions'
-import type { User } from 'firebase/auth';
+import type { User as AuthUser } from 'firebase/auth';
+import type { User } from "@/lib/definitions";
 
-export function UserNav({ user }: { user: User }) {
+export function UserNav({ user }: { user: AuthUser | User }) {
   // @ts-ignore
   const name = user.name || user.displayName || 'User';
   // @ts-ignore
