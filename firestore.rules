@@ -171,5 +171,20 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
+
+    /**
+     * @description Root orders collection for easier Admin access and demo purposes.
+     * Ideally, sensitive user data should be secured strictly.
+     */
+    match /orders/{orderId} {
+      // Allow user to create (checkout)
+      allow create: if isSignedIn(); 
+      // Allow admin to read/update everything
+      allow read, update, delete: if isAdmin();
+      // Allow user to read THEIR OWN orders only (perlu filter query di client)
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    
   }
 }
