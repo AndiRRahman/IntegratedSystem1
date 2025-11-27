@@ -4,22 +4,27 @@
 import { z } from 'zod';
 import { setSession, clearSession, getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { adminAuth, adminDb } from '@/lib/firebase/admin'; // Hanya gunakan Admin SDK di server
-import type { CartItem, Product } from './definitions';
+import { adminAuth, adminDb } from '@/lib/firebase/admin';
+import type { CartItem, Product, User } from './definitions';
+import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
-import { getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 
-// Helper untuk inisialisasi Client SDK di dalam Server Action jika diperlukan (HANYA untuk login)
-// Ini adalah kasus khusus karena Admin SDK tidak punya cara untuk memvalidasi password secara langsung.
-function initializeClientSdk() {
-  if (getApps().some(app => app.name === 'client-sdk-in-server')) {
-    return getApp('client-sdk-in-server');
+// Helper untuk inisialisasi Client SDK di dalam Server Action hanya untuk autentikasi.
+// Ini adalah pola yang disarankan ketika perlu memvalidasi password di server.
+const getClientAuthForServer = () => {
+  const appName = 'client-sdk-for-server-auth';
+  // Hapus instance lama jika ada (penting untuk hot-reloading di dev)
+  if (getApps().some(app => app.name === appName)) {
+    const appToDelete = getApp(appName);
+    deleteApp(appToDelete);
   }
-  return initializeApp(firebaseConfig, 'client-sdk-in-server');
-}
+  const clientApp = initializeApp(firebaseConfig, appName);
+  return getAuth(clientApp);
+};
 
 
 const loginSchema = z.object({
@@ -45,34 +50,25 @@ export async function login(prevState: any, formData: FormData) {
   const { email, password } = validatedFields.data;
 
   try {
-    // 1. Inisialisasi Client SDK khusus untuk tindakan ini
-    const clientApp = initializeClientSdk();
-    const clientAuth = getClientAuth(clientApp);
-
-    // 2. Autentikasi dengan Client SDK untuk memvalidasi password
+    // 1. Gunakan Client SDK sementara HANYA untuk memvalidasi password.
+    const clientAuth = getClientAuthForServer();
     const userCredential = await signInWithEmailAndPassword(clientAuth, email, password);
     const user = userCredential.user;
 
-    // 3. Gunakan Admin SDK untuk mendapatkan data lengkap dan peran dari Firestore
+    // 2. Sekarang gunakan Admin SDK untuk mendapatkan data lengkap dan peran dari Firestore.
     const userDocRef = adminDb.collection('users').doc(user.uid);
     const userDoc = await userDocRef.get();
 
     if (!userDoc.exists) {
       throw new Error('User data not found in Firestore.');
     }
-    const userData = userDoc.data();
+    const userData = userDoc.data() as User;
 
-    // 4. Buat sesi dengan data yang diverifikasi
-    const finalUser = {
-      uid: user.uid,
-      role: userData?.role || 'USER',
-      name: userData?.name || 'User',
-      email: userData?.email || user.email,
-    };
-    await setSession(finalUser);
+    // 3. Buat sesi aman dengan data yang telah diverifikasi.
+    await setSession(userData);
 
-    // 5. Redirect dari Server Action
-    if (finalUser.role === 'ADMIN') {
+    // 4. Redirect dari Server Action.
+    if (userData.role === 'ADMIN') {
       redirect('/admin/dashboard');
     } else {
       redirect('/');
@@ -80,7 +76,7 @@ export async function login(prevState: any, formData: FormData) {
 
   } catch (error: any) {
     console.error('Login error:', error.code, error.message);
-    if (error.code?.startsWith('auth/')) {
+    if (error.code?.includes('auth/')) {
         return { error: 'Invalid credentials. Please try again.' };
     }
     return { error: 'An unexpected error occurred. Please try again.' };
@@ -105,22 +101,23 @@ export async function register(prevState: any, formData: FormData) {
       email,
       password,
       displayName: name,
-      emailVerified: true,
+      emailVerified: true, // Asumsikan email terverifikasi untuk kemudahan
     });
     
     const isAdmin = email.toLowerCase() === 'admin@admin.com';
     const batch = adminDb.batch();
 
-    const userDocRef = adminDb.collection('users').doc(userRecord.uid);
-    const userData = {
+    // Data yang akan disimpan di Firestore
+    const userData: User = {
       id: userRecord.uid,
       name: name,
       email: email,
       role: isAdmin ? 'ADMIN' : 'USER',
-      createdAt: new Date().toISOString(),
     };
+    const userDocRef = adminDb.collection('users').doc(userRecord.uid);
     batch.set(userDocRef, userData);
 
+    // Jika admin, tambahkan ke koleksi role terpisah
     if (isAdmin) {
       const adminRoleRef = adminDb.collection('roles_admin').doc(userRecord.uid);
       batch.set(adminRoleRef, { active: true });
@@ -128,13 +125,10 @@ export async function register(prevState: any, formData: FormData) {
     
     await batch.commit();
 
-    await setSession({
-      uid: userRecord.uid,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role,
-    });
+    // Buat sesi untuk pengguna yang baru terdaftar
+    await setSession(userData);
     
+    // Redirect setelah berhasil
     if (isAdmin) {
       redirect('/admin/dashboard');
     } else {
@@ -179,7 +173,7 @@ export async function createOrder(cartItems: CartItem[], totalAmount: number) {
         productId: item.product.id,
         quantity: item.quantity,
         price: item.product.price,
-        product: {
+        product: { // Denormalisasi data produk untuk kemudahan tampilan
             name: item.product.name,
             imageUrl: item.product.imageUrl
         }
@@ -206,10 +200,12 @@ export async function upsertProduct(productData: Partial<Product>) {
 
   try {
     if (productData.id) {
+      // Update produk yang ada
       const productRef = adminDb.collection('products').doc(productData.id);
       await productRef.update({ ...productData });
       return { success: true, id: productData.id };
     } else {
+      // Buat produk baru
       const newProductRef = adminDb.collection('products').doc();
       const newProduct = {
         ...productData,
@@ -226,34 +222,37 @@ export async function upsertProduct(productData: Partial<Product>) {
 }
 
 export async function uploadProductImage(formData: FormData) {
-  const file = formData.get('file') as File;
-  if (!file) {
-    return { error: 'No file provided.' };
-  }
-  
-  const session = await getSession();
-  if (!session) {
-      return { error: 'Unauthorized' };
-  }
-
-  try {
-    const clientApp = initializeClientSdk();
-    const storage = getStorage(clientApp);
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.round(Math.random() * 1E9)}.${fileExtension}`;
-    const storageRef = ref(storage, `product-images/${fileName}`);
-
-    await uploadBytes(storageRef, fileBuffer, {
-        contentType: file.type,
-    });
+    const file = formData.get('file') as File;
+    if (!file) {
+        return { error: 'No file provided.' };
+    }
     
-    const downloadURL = await getDownloadURL(storageRef);
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN') {
+        return { error: 'Unauthorized' };
+    }
 
-    return { success: true, url: downloadURL };
-  } catch (error) {
-    console.error('Image upload error:', error);
-    return { error: 'Failed to upload image.' };
-  }
+    try {
+        const bucket = getAdminStorage().bucket();
+        const fileBuffer = Buffer.from(await file.arrayBuffer());
+        const fileExtension = file.name.split('.').pop();
+        const fileName = `product-images/${Date.now()}-${Math.round(Math.random() * 1E9)}.${fileExtension}`;
+        const fileUpload = bucket.file(fileName);
+
+        await fileUpload.save(fileBuffer, {
+            metadata: {
+                contentType: file.type,
+            },
+        });
+
+        // Jadikan file publik agar bisa diakses
+        await fileUpload.makePublic();
+        
+        const downloadURL = fileUpload.publicUrl();
+
+        return { success: true, url: downloadURL };
+    } catch (error) {
+        console.error('Image upload error:', error);
+        return { error: 'Failed to upload image.' };
+    }
 }

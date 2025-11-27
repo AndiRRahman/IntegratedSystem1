@@ -1,3 +1,4 @@
+
 import { cookies } from 'next/headers';
 import type { User } from '@/lib/definitions';
 import { SignJWT, jwtVerify } from 'jose';
@@ -21,18 +22,11 @@ export async function getSession(): Promise<User | null> {
   }
 }
 
-export async function setSession(user: { uid: string, name?: string | null, email?: string | null, role?: 'USER' | 'ADMIN' }) {
+export async function setSession(user: User) {
   const expirationTime = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
   
-  // This is the object that will be stored in the cookie
-  const sessionPayload: User = {
-      id: user.uid,
-      name: user.name || 'Anonymous',
-      email: user.email || 'no-email@provided.com',
-      role: user.role || 'USER',
-  };
-
-  const token = await new SignJWT(sessionPayload)
+  // payload JWT adalah objek User lengkap
+  const token = await new SignJWT(user)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
