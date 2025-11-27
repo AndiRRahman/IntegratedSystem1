@@ -81,10 +81,13 @@ export async function login(prevState: any, formData: FormData) {
     const finalUser = { uid: user.uid, role: userData?.role, name: userData?.name, email: userData?.email };
 
     await setSession(finalUser);
-
-    // No need to redirect from here, the login page will handle it
-    // The redirect in the component is more reliable as it's client-side navigation
-    // after the state has been set.
+    
+    // @ts-ignore
+    if (finalUser.role === 'ADMIN') {
+        redirect('/admin/dashboard');
+    } else {
+        redirect('/');
+    }
 
   } catch (error: any) {
     console.error('Login error:', error.code, error.message);
@@ -139,18 +142,18 @@ export async function register(prevState: any, formData: FormData) {
 
     await setSession(finalUser);
     
+    if (isAdmin) {
+        redirect('/admin/dashboard');
+    } else {
+        redirect('/');
+    }
+    
   } catch (error: any) {
     console.error('Registration error:', error.code, error.message);
     if (error.code === 'auth/email-already-in-use') {
       return { error: 'This email is already registered.' };
     }
     return { error: 'An error occurred during registration.' };
-  }
-  
-  if (email.toLowerCase() === 'admin@admin.com') {
-    redirect('/admin/dashboard');
-  } else {
-    redirect('/');
   }
 }
 
